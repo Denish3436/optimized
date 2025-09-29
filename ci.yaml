@@ -6,9 +6,9 @@ on:
       - main
 
 permissions:
-  contents: write
-  packages: write
-  pull-requests: read
+  contents: write       # For creating releases
+  packages: write       # For pushing to GHCR
+  pull-requests: read   # If needed for future
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -84,15 +84,49 @@ jobs:
             DD_GIT_REPOSITORY_URL=https://github.com/${{ github.repository }}
             DD_GIT_COMMIT_SHA=${{ github.sha }}
 
-      - name: Create Release
+      - name: Preview Release Notes (no release creation)
+        run: |
+          pr_number=$(git log -1 --pretty=%s | sed -n 's/.*#\([0-9]\+\).*/\1/p')
+          if [ -z "$pr_number" ]; then
+            echo "No PR number found in commit message."
+            exit 0
+          fi
+
+          echo "Found PR: #$pr_number"
+
+          pr_title=$(gh pr view $pr_number --json title -q .title)
+          pr_body=$(gh pr view $pr_number --json body -q .body)
+          pr_url=$(gh pr view $pr_number --json url -q .url)
+
+          notes_file=$(mktemp)
+          {
+            echo "# $pr_title"
+            echo
+            echo "Linked PR: $pr_url"
+            echo
+            echo "$pr_body"
+          } > "$notes_file"
+
+          cat "$notes_file"
+
+          echo "NOTES_FILE=$notes_file" >> $GITHUB_ENV
+          echo "PR_TITLE=$pr_title" >> $GITHUB_ENV
+          echo "PR_URL=$pr_url" >> $GITHUB_ENV
+
+      - name: create release 
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ steps.ver.outputs.NEXT_TAG }}" \
-            --title "Release ${{ steps.ver.outputs.NEXT_TAG }}" \
-            --notes "Automated release for ${{ steps.ver.outputs.NEXT_TAG }}" \
-            --target main \
-            --latest
+          if gh release create "${{ env.NEXT_TAG }}" \
+             --title "Release ${{ env.NEXT_TAG }}" \
+             --notes-file "${{ env.NOTES_FILE }}" \
+             --target main \
+             --latest; then
+            echo "release_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "release_created=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Slack Notification
         if: always()
@@ -100,8 +134,17 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_CHANNEL: "fintron-eng-back-end"
-          SLACK_COLOR: ${{ job.status }}
+          SLACK_ICON: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+          SLACK_COLOR: ${{ job.status }}  
           SLACK_TITLE: 'Docker Build and Release'
           SLACK_MESSAGE: |
-            *Version:* ${{ steps.ver.outputs.NEXT_TAG }}
+            *Workflow:* ${{ github.workflow }}
+            *Branch:* ${{ env.BRANCH_NAME }}
+            *Version:* ${{ env.NEXT_TAG }}
+            *Author:* ${{ github.actor }}
             *Status:* ${{ job.status }}
+            *Release Created:* ${{ steps.release.outputs.release_created || 'false' }}
+            *PR Link:* ${{ env.PR_URL }}
+            *PR Title:* ${{ env.PR_TITLE }}
+          SLACK_FOOTER: 'GitHub Actions | ${{ github.repository }}'
+          MSG_MINIMAL: false
