@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build-and-release:
     runs-on: [ docker ]
+    env:
+    GITHUB_STEP_SUMMARY: /dev/null   
     steps:
       - name: Checkout
         uses: actions/checkout@v4
