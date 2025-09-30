@@ -84,6 +84,10 @@ jobs:
             DD_GIT_REPOSITORY_URL=https://github.com/${{ github.repository }}
             DD_GIT_COMMIT_SHA=${{ github.sha }}
 
+      - name: Clear job summary
+        if: always()
+        run: printf '' > "$GITHUB_STEP_SUMMARY"
+
       # - name: Preview Release Notes (no release creation)
       #   run: |
       #     pr_number=$(git log -1 --pretty=%s | sed -n 's/.*#\([0-9]\+\).*/\1/p')
