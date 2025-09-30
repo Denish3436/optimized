@@ -17,8 +17,6 @@ concurrency:
 jobs:
   build-and-release:
     runs-on: [ docker ]
-    env:
-    GITHUB_STEP_SUMMARY: /dev/null   
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,6 +64,7 @@ jobs:
             ghcr.io/fintronners/ftron:${{ steps.ver.outputs.NEXT_TAG }}-uat-latest
           platforms: linux/amd64
           provenance: false
+          attestations: false #
           cache-from: type=gha,scope=ftron
           cache-to: type=gha,scope=ftron,mode=max
 
@@ -80,15 +79,12 @@ jobs:
             ghcr.io/fintronners/ftron:${{ steps.ver.outputs.NEXT_TAG }}-prod-latest
           platforms: linux/amd64
           provenance: false
+          attestations: false #
           cache-from: type=gha,scope=ftron
           cache-to: type=gha,scope=ftron,mode=max
           build-args: |
             DD_GIT_REPOSITORY_URL=https://github.com/${{ github.repository }}
             DD_GIT_COMMIT_SHA=${{ github.sha }}
-
-      - name: Clear job summary
-        if: always()
-        run: printf '' > "$GITHUB_STEP_SUMMARY"
 
       # - name: Preview Release Notes (no release creation)
       #   run: |
